@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Size of Life - Interactive Scale Explorer</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">
+        <div id="header">
+            <h1>Size of Life</h1>
+            <div id="scale-display">1:1</div>
+        </div>
+        
+        <div id="controls">
+            <button id="zoom-out">-</button>
+            <input type="range" id="zoom-slider" min="0" max="100" value="50">
+            <button id="zoom-in">+</button>
+        </div>
+        
+        <div id="size-info">
+            <div id="current-size">1 meter</div>
+            <div id="size-range"></div>
+        </div>
+        
+        <div id="canvas-container">
+            <canvas id="main-canvas"></canvas>
+            <div id="labels-container"></div>
+        </div>
+        
+        <div id="object-info">
+            <h2 id="object-name">Scroll to explore</h2>
+            <p id="object-description">Use the slider or scroll to zoom through different scales of life</p>
+            <div id="object-size"></div>
+        </div>
+    </div>
+    
+    <script src="data.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
