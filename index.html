@@ -2,35 +2,35 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Size of Life</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div id="main-container">
-        <div id="header">
+    <div class="container">
+        <div class="header">
             <h1>Size of Life</h1>
-            <div id="current-scale"></div>
         </div>
         
-        <div id="viewport">
-            <div id="scroll-content">
-                <!-- Objects will be rendered here -->
+        <div class="main-view">
+            <canvas id="canvas"></canvas>
+            <div id="labels"></div>
+        </div>
+        
+        <div class="controls">
+            <div class="zoom-indicator">
+                <span id="zoom-level">1 m</span>
             </div>
-            <div id="reference-human">
-                <div class="human-icon">👤</div>
-                <div class="human-label">You are here</div>
-            </div>
         </div>
         
-        <div id="info-panel">
-            <h2 id="object-title">Scroll to explore</h2>
-            <p id="object-desc">Use your mouse wheel or trackpad to zoom through different scales</p>
-            <div id="object-size-display"></div>
+        <div class="info-box" id="info-box">
+            <h2 id="info-title">Human</h2>
+            <p id="info-description">Average human height</p>
+            <div id="info-size">1.7 m</div>
         </div>
         
-        <div id="scale-bar">
-            <div id="scale-marker"></div>
+        <div class="instructions">
+            Scroll to zoom
         </div>
     </div>
     

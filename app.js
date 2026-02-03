@@ -1,44 +1,48 @@
-// Configuration
-const PIXELS_PER_ORDER = 800; // Pixels per order of magnitude
-const HUMAN_SIZE = 1.7; // meters
-const VIEWPORT_HEIGHT = window.innerHeight;
-const MIN_OBJECT_SIZE = 10; // minimum pixels
-const MAX_OBJECT_SIZE = 600; // maximum pixels
+// Canvas setup
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const labelsContainer = document.getElementById('labels');
+
+// UI elements
+const zoomLevelDisplay = document.getElementById('zoom-level');
+const infoTitle = document.getElementById('info-title');
+const infoDescription = document.getElementById('info-description');
+const infoSize = document.getElementById('info-size');
 
 // State
-let scrollPosition = 0; // Current scroll position in pixels
-let targetScroll = 0;
-let currentFocusedObject = null;
+let zoom = 1.7; // Current zoom level in meters (start at human height)
+let targetZoom = 1.7;
+let canvasWidth, canvasHeight;
+let centerX, centerY;
 
-// DOM elements
-const scrollContent = document.getElementById('scroll-content');
-const currentScaleDisplay = document.getElementById('current-scale');
-const objectTitle = document.getElementById('object-title');
-const objectDesc = document.getElementById('object-desc');
-const objectSizeDisplay = document.getElementById('object-size-display');
-const scaleMarker = document.getElementById('scale-marker');
-const viewport = document.getElementById('viewport');
+// Constants
+const MIN_ZOOM = 1e-35; // Planck length
+const MAX_ZOOM = 1e27; // Observable universe
+const ZOOM_SPEED = 0.15;
+const REFERENCE_SIZE = 200; // Reference circle size in pixels
 
-// Convert size in meters to position in pixels
-function sizeToPosition(meters) {
-    const logSize = Math.log10(meters);
-    return logSize * PIXELS_PER_ORDER;
-}
-
-// Convert position to size in meters
-function positionToSize(pixels) {
-    const logSize = pixels / PIXELS_PER_ORDER;
-    return Math.pow(10, logSize);
+// Initialize canvas
+function resizeCanvas() {
+    canvasWidth = window.innerWidth;
+    canvasHeight = window.innerHeight;
+    canvas.width = canvasWidth;
+    canvas.height = canvasHeight;
+    centerX = canvasWidth / 2;
+    centerY = canvasHeight / 2;
 }
 
 // Format size for display
 function formatSize(meters) {
     const absMeters = Math.abs(meters);
     
-    if (absMeters < 1e-12) {
-        return `${(meters * 1e15).toFixed(2)} fm`;
+    if (absMeters === 0) return "0 m";
+    
+    if (absMeters < 1e-15) {
+        return `${(meters * 1e18).toExponential(1)} am`;
+    } else if (absMeters < 1e-12) {
+        return `${(meters * 1e15).toFixed(absMeters < 1e-14 ? 1 : 2)} fm`;
     } else if (absMeters < 1e-9) {
-        return `${(meters * 1e12).toFixed(2)} pm`;
+        return `${(meters * 1e12).toFixed(absMeters < 1e-11 ? 1 : 2)} pm`;
     } else if (absMeters < 1e-6) {
         return `${(meters * 1e9).toFixed(2)} nm`;
     } else if (absMeters < 1e-3) {
@@ -49,233 +53,234 @@ function formatSize(meters) {
         return `${meters.toFixed(2)} m`;
     } else if (absMeters < 1e6) {
         return `${(meters / 1e3).toFixed(2)} km`;
+    } else if (absMeters < 1e9) {
+        return `${(meters / 1e6).toFixed(2)} Mm`;
     } else if (absMeters < 9.461e15) {
-        const millions = meters / 1e6;
-        if (millions < 1000) {
-            return `${millions.toFixed(2)} million km`;
-        } else {
-            return `${(millions / 1000).toFixed(2)} billion km`;
-        }
+        return `${(meters / 1e9).toFixed(2)} Gm`;
     } else {
         const lightYears = meters / 9.461e15;
         if (lightYears < 1000) {
-            return `${lightYears.toFixed(2)} light years`;
+            return `${lightYears.toFixed(2)} ly`;
         } else if (lightYears < 1e6) {
-            return `${(lightYears / 1000).toFixed(2)} thousand light years`;
+            return `${(lightYears / 1000).toFixed(2)} thousand ly`;
+        } else if (lightYears < 1e9) {
+            return `${(lightYears / 1e6).toFixed(2)} million ly`;
         } else {
-            return `${(lightYears / 1e6).toFixed(2)} million light years`;
+            return `${(lightYears / 1e9).toFixed(2)} billion ly`;
         }
     }
 }
 
-// Calculate object size in pixels based on current view
-function calculateObjectSize(objectMeters, currentViewSize) {
-    const ratio = objectMeters / currentViewSize;
-    const baseSize = ratio * (VIEWPORT_HEIGHT * 0.6);
-    return Math.max(MIN_OBJECT_SIZE, Math.min(MAX_OBJECT_SIZE, baseSize));
+// Calculate object radius in pixels based on current zoom
+function getObjectRadius(objectSize, currentZoom) {
+    // The object's size relative to the current zoom level
+    const ratio = objectSize / currentZoom;
+    // Scale to pixels
+    const radius = ratio * REFERENCE_SIZE;
+    return radius;
 }
 
-// Render all objects
-function renderObjects() {
-    scrollContent.innerHTML = '';
-    
-    const minPos = sizeToPosition(lifeObjects[0].size);
-    const maxPos = sizeToPosition(lifeObjects[lifeObjects.length - 1].size);
-    const totalWidth = maxPos - minPos + 4000; // Add padding
-    
-    scrollContent.style.width = `${totalWidth}px`;
-    
-    lifeObjects.forEach(obj => {
-        const objElement = document.createElement('div');
-        objElement.className = 'size-object';
-        objElement.dataset.size = obj.size;
-        objElement.dataset.name = obj.name;
-        objElement.dataset.description = obj.description;
-        
-        const position = sizeToPosition(obj.size) - minPos + 2000;
-        objElement.style.left = `${position}px`;
-        
-        const circle = document.createElement('div');
-        circle.className = 'object-circle';
-        circle.style.backgroundColor = obj.color;
-        
-        const label = document.createElement('div');
-        label.className = 'object-label';
-        label.textContent = obj.name;
-        
-        objElement.appendChild(circle);
-        objElement.appendChild(label);
-        
-        objElement.addEventListener('click', () => {
-            const targetPos = position - window.innerWidth / 2;
-            targetScroll = -targetPos;
-            focusObject(obj);
-        });
-        
-        scrollContent.appendChild(objElement);
-    });
+// Check if object should be visible
+function isObjectVisible(objectSize, currentZoom) {
+    const radius = getObjectRadius(objectSize, currentZoom);
+    // Show objects that are between 5px and screen size
+    return radius >= 5 && radius <= Math.max(canvasWidth, canvasHeight) * 2;
 }
 
-// Update object sizes based on current view
-function updateObjectSizes() {
-    const centerViewPos = -scrollPosition + window.innerWidth / 2;
-    const currentViewSize = positionToSize(centerViewPos);
+// Draw all objects
+function drawObjects() {
+    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+    labelsContainer.innerHTML = '';
     
-    document.querySelectorAll('.size-object').forEach(obj => {
-        const objSize = parseFloat(obj.dataset.size);
-        const pixelSize = calculateObjectSize(objSize, currentViewSize);
-        
-        const circle = obj.querySelector('.object-circle');
-        circle.style.width = `${pixelSize}px`;
-        circle.style.height = `${pixelSize}px`;
-        
-        // Position vertically centered
-        obj.style.top = `50%`;
-        obj.style.transform = `translateY(-50%)`;
-        
-        // Fade out objects that are too small or too large
-        const objPos = parseFloat(obj.style.left);
-        const distanceFromCenter = Math.abs(objPos - centerViewPos);
-        const opacity = distanceFromCenter < window.innerWidth * 2 ? 1 : 0.3;
-        obj.style.opacity = opacity;
-    });
-}
-
-// Focus on a specific object
-function focusObject(obj) {
-    currentFocusedObject = obj;
-    objectTitle.textContent = obj.name;
-    objectDesc.textContent = obj.description;
-    objectSizeDisplay.textContent = `Size: ${formatSize(obj.size)}`;
-}
-
-// Find closest object to center
-function findClosestObject() {
-    const centerViewPos = -scrollPosition + window.innerWidth / 2;
-    let closestObj = null;
+    let closestObject = null;
     let closestDistance = Infinity;
     
     lifeObjects.forEach(obj => {
-        const objPos = sizeToPosition(obj.size) - sizeToPosition(lifeObjects[0].size) + 2000;
-        const distance = Math.abs(objPos - centerViewPos);
+        if (!isObjectVisible(obj.size, zoom)) return;
         
-        if (distance < closestDistance) {
-            closestDistance = distance;
-            closestObj = obj;
+        const radius = getObjectRadius(obj.size, zoom);
+        
+        // Draw circle
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+        
+        // Create gradient
+        const gradient = ctx.createRadialGradient(
+            centerX, centerY, 0,
+            centerX, centerY, radius
+        );
+        gradient.addColorStop(0, obj.color);
+        gradient.addColorStop(1, obj.color + '80');
+        
+        ctx.fillStyle = gradient;
+        ctx.fill();
+        
+        // Outer glow
+        ctx.strokeStyle = obj.color + '40';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        // Add label if object is prominent
+        if (radius >= 30 && radius <= canvasHeight / 2) {
+            const label = document.createElement('div');
+            label.className = 'label';
+            label.textContent = obj.name;
+            label.style.left = centerX + 'px';
+            label.style.top = (centerY - radius - 25) + 'px';
+            labelsContainer.appendChild(label);
+        }
+        
+        // Find closest object to current zoom
+        const sizeDiff = Math.abs(Math.log10(obj.size) - Math.log10(zoom));
+        if (sizeDiff < closestDistance) {
+            closestDistance = sizeDiff;
+            closestObject = obj;
         }
     });
     
-    if (closestObj && closestObj !== currentFocusedObject) {
-        focusObject(closestObj);
+    // Update info box with closest object
+    if (closestObject) {
+        infoTitle.textContent = closestObject.name;
+        infoDescription.textContent = closestObject.description;
+        infoSize.textContent = formatSize(closestObject.size);
     }
+    
+    // Draw reference circle (shows current zoom level)
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, REFERENCE_SIZE, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([5, 5]);
+    ctx.stroke();
+    ctx.setLineDash([]);
 }
 
-// Update scale display
-function updateScaleDisplay() {
-    const centerViewPos = -scrollPosition + window.innerWidth / 2;
-    const currentViewSize = positionToSize(centerViewPos);
-    currentScaleDisplay.textContent = formatSize(currentViewSize);
-    
-    // Update scale bar
-    const minSize = lifeObjects[0].size;
-    const maxSize = lifeObjects[lifeObjects.length - 1].size;
-    const progress = (Math.log10(currentViewSize) - Math.log10(minSize)) / 
-                     (Math.log10(maxSize) - Math.log10(minSize));
-    scaleMarker.style.left = `${progress * 100}%`;
+// Update zoom level display
+function updateZoomDisplay() {
+    zoomLevelDisplay.textContent = formatSize(zoom);
 }
 
 // Animation loop
 function animate() {
-    // Smooth scrolling
-    scrollPosition += (targetScroll - scrollPosition) * 0.1;
+    // Smooth zoom transition
+    zoom += (targetZoom - zoom) * ZOOM_SPEED;
     
-    scrollContent.style.transform = `translateX(${scrollPosition}px)`;
+    // Clamp zoom
+    zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom));
     
-    updateObjectSizes();
-    updateScaleDisplay();
-    findClosestObject();
+    drawObjects();
+    updateZoomDisplay();
     
     requestAnimationFrame(animate);
 }
 
-// Handle scroll/wheel events
-let scrollTimeout;
-viewport.addEventListener('wheel', (e) => {
+// Handle mouse wheel
+let lastWheelTime = 0;
+const wheelThrottle = 16; // ~60fps
+
+canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
     
-    const delta = e.deltaY || e.deltaX;
-    targetScroll -= delta * 2;
+    const now = Date.now();
+    if (now - lastWheelTime < wheelThrottle) return;
+    lastWheelTime = now;
     
-    // Limit scrolling
-    const maxScroll = 0;
-    const minScroll = -(scrollContent.offsetWidth - window.innerWidth);
-    targetScroll = Math.max(minScroll, Math.min(maxScroll, targetScroll));
+    const delta = e.deltaY;
     
-    clearTimeout(scrollTimeout);
-    scrollTimeout = setTimeout(() => {
-        findClosestObject();
-    }, 150);
+    // Zoom in = decrease zoom value (see smaller things)
+    // Zoom out = increase zoom value (see bigger things)
+    const zoomFactor = delta > 0 ? 1.1 : 0.909; // ~10% per scroll
+    
+    targetZoom *= zoomFactor;
+    targetZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, targetZoom));
 }, { passive: false });
 
 // Touch support
-let touchStartX = 0;
-let touchStartScroll = 0;
+let touchStartDistance = 0;
+let touchStartZoom = 0;
 
-viewport.addEventListener('touchstart', (e) => {
-    touchStartX = e.touches[0].clientX;
-    touchStartScroll = targetScroll;
-});
-
-viewport.addEventListener('touchmove', (e) => {
-    e.preventDefault();
-    const touchX = e.touches[0].clientX;
-    const deltaX = touchX - touchStartX;
-    targetScroll = touchStartScroll + deltaX;
-    
-    const maxScroll = 0;
-    const minScroll = -(scrollContent.offsetWidth - window.innerWidth);
-    targetScroll = Math.max(minScroll, Math.min(maxScroll, targetScroll));
+canvas.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2) {
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        touchStartDistance = Math.sqrt(dx * dx + dy * dy);
+        touchStartZoom = targetZoom;
+    }
 }, { passive: false });
 
-viewport.addEventListener('touchend', () => {
-    findClosestObject();
-});
+canvas.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    
+    if (e.touches.length === 2) {
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        const scale = touchStartDistance / distance;
+        targetZoom = touchStartZoom * scale;
+        targetZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, targetZoom));
+    } else if (e.touches.length === 1) {
+        // Single finger scroll for zoom
+        const touch = e.touches[0];
+        const deltaY = touch.clientY - (window.innerHeight / 2);
+        
+        // Slow zoom based on vertical position
+        const zoomFactor = 1 + (deltaY / window.innerHeight) * 0.02;
+        targetZoom *= zoomFactor;
+        targetZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, targetZoom));
+    }
+}, { passive: false });
 
 // Keyboard controls
 document.addEventListener('keydown', (e) => {
-    if (e.key === 'ArrowLeft') {
-        targetScroll += 200;
-    } else if (e.key === 'ArrowRight') {
-        targetScroll -= 200;
+    if (e.key === 'ArrowUp' || e.key === '+' || e.key === '=') {
+        e.preventDefault();
+        targetZoom *= 0.8;
+        targetZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, targetZoom));
+    } else if (e.key === 'ArrowDown' || e.key === '-') {
+        e.preventDefault();
+        targetZoom *= 1.25;
+        targetZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, targetZoom));
     }
-    
-    const maxScroll = 0;
-    const minScroll = -(scrollContent.offsetWidth - window.innerWidth);
-    targetScroll = Math.max(minScroll, Math.min(maxScroll, targetScroll));
+});
+
+// Click to cycle through objects
+let currentObjectIndex = lifeObjects.findIndex(obj => obj.size === 1.7) || 0;
+
+canvas.addEventListener('click', () => {
+    currentObjectIndex = (currentObjectIndex + 1) % lifeObjects.length;
+    targetZoom = lifeObjects[currentObjectIndex].size;
 });
 
 // Initialize
-function init() {
-    renderObjects();
-    
-    // Start at human size
-    const humanPos = sizeToPosition(HUMAN_SIZE) - sizeToPosition(lifeObjects[0].size) + 2000;
-    targetScroll = -humanPos + window.innerWidth / 2;
-    scrollPosition = targetScroll;
-    
-    // Find and focus on human
-    const humanObj = lifeObjects.find(obj => obj.size === HUMAN_SIZE);
-    if (humanObj) {
-        focusObject(humanObj);
-    }
-    
-    animate();
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+// Find human object and start there
+const humanObj = lifeObjects.find(obj => obj.name === "Human (average)");
+if (humanObj) {
+    zoom = humanObj.size;
+    targetZoom = humanObj.size;
 }
 
-// Handle window resize
-window.addEventListener('resize', () => {
-    updateObjectSizes();
-});
+animate();
 
-// Start
-init();
+// Hide instructions after first interaction
+let hasInteracted = false;
+const instructions = document.querySelector('.instructions');
+
+function hideInstructions() {
+    if (!hasInteracted) {
+        hasInteracted = true;
+        if (instructions) {
+            instructions.style.opacity = '0';
+            setTimeout(() => {
+                instructions.style.display = 'none';
+            }, 300);
+        }
+    }
+}
+
+canvas.addEventListener('wheel', hideInstructions, { once: true });
+canvas.addEventListener('touchstart', hideInstructions, { once: true });
+document.addEventListener('keydown', hideInstructions, { once: true });
