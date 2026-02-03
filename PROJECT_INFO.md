@@ -4,8 +4,9 @@
 
 ### Repository
 - **GitHub URL**: https://github.com/peooozz/size-of-life
-- **Live Demo**: https://peooozz.github.io/size-of-life/
-  *(Note: It may take a few minutes for GitHub Pages to build and deploy)*
+- **Live Demo (Vercel)**: https://size-of-life.vercel.app ⭐ **PRIMARY**
+- **Live Demo (GitHub Pages)**: https://peooozz.github.io/size-of-life/
+  *(Note: GitHub Pages may take a few minutes to build)*
 
 ### What This Is
 An interactive visualization that lets you explore the scale of objects in our universe, from the Planck length to the observable universe - spanning 62 orders of magnitude!
